@@ -26,8 +26,7 @@ services:
     image: ghcr.io/aenima1337/rinkhals-timelapse:latest
     container_name: rinkhals-timelapse
     restart: unless-stopped
-    ports:
-      - "5005:5005"
+    network_mode: host
     volumes:
       - ./snapshots:/app/snapshots
       - ./videos:/app/videos
