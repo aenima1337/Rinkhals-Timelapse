@@ -3,7 +3,7 @@ Absolut! Eine gut lesbare `README.md` ist das A und O für jedes Open-Source-Pro
 
 ---
 
-### Version 1: `README.md` (Deutsch)
+Deutsch
 
 ```markdown
 # 📸 Rinkhals-Timelapse
@@ -80,7 +80,7 @@ Fehler gefunden? Eine Idee für ein neues Feature? Kontaktiere mich gerne auf Gi
 
 ---
 
-### Version 2: `README.md` (English)
+Global
 
 ```markdown
 # 📸 Rinkhals-Timelapse
