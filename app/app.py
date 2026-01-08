@@ -20,11 +20,16 @@ for d in [SNAPSHOT_DIR, VIDEO_DIR, THUMB_DIR]:
     os.makedirs(d, exist_ok=True)
 
 def load_config():
-    defaults = {"printer_ip": "10.10.10.99", "mode": "layer"}
+    defaults = {"printer_ip": os.environ.get("PRINTER_IP", "10.10.10.99"), "mode": "layer"}
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "r") as f:
-            return {**defaults, **json.load(f)}
-    return defaults
+            loaded = {**defaults, **json.load(f)}
+    else:
+        loaded = defaults
+    env_ip = os.environ.get("PRINTER_IP")
+    if env_ip:
+        loaded["printer_ip"] = env_ip  # allow Docker env to override persisted config
+    return loaded
 
 config = load_config()
 LOG_STACK = deque(maxlen=10)
@@ -180,15 +185,16 @@ HTML_TEMPLATE = """
         .input-group { display: flex; flex-direction: column; gap: 4px; }
         .label { font-size: 10px; font-weight: bold; color: #64748b; text-transform: uppercase; }
         input, select { background: #0f1116; border: 1px solid var(--border); color: white; padding: 8px; border-radius: 4px; font-size: 12px; }
-        .btn { background: var(--accent); color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 11px; text-transform: uppercase; transition: 0.2s; }
+        .btn { background: var(--accent); color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 11px; text-transform: uppercase; transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px; }
         .btn-danger { background: #334155; margin-top: 5px; color: #cbd5e1; }
         .btn-danger:hover { background: var(--danger); color: white; }
+        .btn svg { width: 14px; height: 14px; fill: currentColor; }
         .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px; }
         .vid-item { background: var(--card); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; cursor: pointer; position: relative; transition: 0.2s; }
         .vid-item:hover { transform: translateY(-3px); border-color: var(--accent); }
         .vid-thumb { width: 100%; aspect-ratio: 16/9; object-fit: cover; opacity: 0.8; }
         .vid-name { padding: 10px; font-size: 10px; color: #cbd5e1; }
-        .del-btn { position: absolute; top: 5px; right: 5px; background: rgba(220, 38, 38, 0.9); color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 9px; opacity: 0; }
+        .del-btn { position: absolute; top: 8px; right: 8px; background: rgba(220, 38, 38, 0.9); color: white; border: none; padding: 8px; border-radius: 6px; cursor: pointer; font-size: 9px; opacity: 0; display: flex; align-items: center; justify-content: center; }
         .vid-item:hover .del-btn { opacity: 1; }
         #modal { position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 20px; backdrop-filter: blur(5px); }
         .modal-inner { width: 100%; max-width: 900px; display: flex; flex-direction: column; gap: 15px; }
@@ -216,8 +222,14 @@ HTML_TEMPLATE = """
                             <option value="time" {% if mode == 'time' %}selected{% endif %}>Smart Time</option>
                         </select>
                     </div>
-                    <button class="btn">SAVE SETTINGS</button>
-                    <button type="button" class="btn btn-danger" onclick="manualRender()">FORCE RENDER</button>
+                    <button class="btn">
+                        <svg viewBox="0 0 24 24"><path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
+                        SAVE SETTINGS
+                    </button>
+                    <button type="button" class="btn btn-danger" onclick="manualRender()">
+                        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                        FORCE RENDER
+                    </button>
                 </form>
             </div>
         </div>
@@ -228,7 +240,9 @@ HTML_TEMPLATE = """
                 <div class="vid-item" onclick="openVid('{{vid}}')">
                     <img src="/thumb/{{vid}}.jpg" class="vid-thumb">
                     <div class="vid-name">{{vid}}</div>
-                    <a href="/delete/{{vid}}" class="del-btn" onclick="event.stopPropagation(); return confirm('Delete?')">DEL</a>
+                    <a href="/delete/{{vid}}" class="del-btn" onclick="event.stopPropagation(); return confirm('Delete?')">
+                        <svg style="width:16px;height:16px;fill:currentColor" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                    </a>
                 </div>
                 {% endfor %}
             </div>
@@ -237,15 +251,28 @@ HTML_TEMPLATE = """
     <div id="modal" onclick="closeVid()">
         <div class="modal-inner" onclick="event.stopPropagation()">
             <video id="player" controls></video>
-            <div style="display:flex; justify-content: flex-end; gap:10px;">
-                <button class="btn" onclick="closeVid()">CLOSE</button>
-                <a id="dl-btn" href="#" download class="btn" style="text-decoration:none">DOWNLOAD</a>
+            <div style="display:flex; justify-content: space-between; gap:10px;">
+                <button class="btn btn-danger" onclick="deleteCurrentVid()">
+                    <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                    DELETE
+                </button>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn" onclick="closeVid()">
+                        <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                        CLOSE
+                    </button>
+                    <a id="dl-btn" href="#" download class="btn" style="text-decoration:none">
+                        <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                        DOWNLOAD
+                    </a>
+                </div>
             </div>
         </div>
     </div>
     <script>
         let lastImgTs = 0;
         let knownVideoCount = {{ vids|length }};
+        let currentVideo = '';
         function updateStatus() {
             if(document.getElementById('modal').style.display === 'flex') return;
             fetch('/status').then(r => r.json()).then(data => {
@@ -269,11 +296,26 @@ HTML_TEMPLATE = """
             }
         }
         setInterval(updateStatus, 2000);
-        function openVid(f) { document.getElementById('player').src = '/video_file/'+f; document.getElementById('dl-btn').href = '/video_file/'+f; document.getElementById('modal').style.display='flex'; document.getElementById('player').play(); }
-        function closeVid() { document.getElementById('modal').style.display='none'; document.getElementById('player').pause(); }
+        function openVid(f) { 
+            currentVideo = f;
+            document.getElementById('player').src = '/video_file/'+f; 
+            document.getElementById('dl-btn').href = '/video_file/'+f; 
+            document.getElementById('modal').style.display='flex'; 
+            document.getElementById('player').play(); 
+        }
+        function closeVid() { 
+            document.getElementById('modal').style.display='none'; 
+            document.getElementById('player').pause(); 
+            currentVideo = '';
+        }
+        function deleteCurrentVid() {
+            if(confirm('Are you sure you want to delete this video?')) {
+                window.location.href = '/delete/' + currentVideo;
+            }
+        }
     </script>
 <div style="text-align: center; padding: 20px; font-size: 10px; color: #64748b;">
-        Rinkhals Timelapse v1.0 | Created by aenima1337</strong> | 
+        Rinkhals Timelapse v1.1 | Created by aenima1337</strong> | 
         <a href="https://github.com/aenima1337/Rinkhals-Timelapse" target="_blank" style="color: #64748b;">GitHub</a>
     </div>
 </body>
