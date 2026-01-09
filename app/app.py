@@ -215,7 +215,9 @@ HTML_TEMPLATE = """
                 </div>
                 <div class="log-area" id="log-box"></div>
                 <form action="/save_config" method="POST" class="settings-form">
+                    {% if not ip_is_env_set %}
                     <div class="input-group"><label class="label">Printer IP</label><input name="ip" value="{{ip}}"></div>
+                    {% endif %}
                     <div class="input-group"><label class="label">Capture Mode</label>
                         <select name="mode">
                             <option value="layer" {% if mode == 'layer' %}selected{% endif %}>Layer Change</option>
@@ -325,7 +327,8 @@ HTML_TEMPLATE = """
 @app.route('/')
 def index():
     vids = sorted([f for f in os.listdir(VIDEO_DIR) if f.endswith('.mp4')], reverse=True)
-    return render_template_string(HTML_TEMPLATE, logs=list(LOG_STACK), vids=vids, ip=config['printer_ip'], mode=config['mode'])
+    ip_is_env_set = os.environ.get("PRINTER_IP") is not None
+    return render_template_string(HTML_TEMPLATE, logs=list(LOG_STACK), vids=vids, ip=config['printer_ip'], mode=config['mode'], ip_is_env_set=ip_is_env_set)
 
 @app.route('/save_config', methods=['POST'])
 def save_config():
